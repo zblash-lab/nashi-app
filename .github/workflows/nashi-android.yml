@@ -1,5 +1,6 @@
 # Upload this YAML and erbapp-android-sources.zip together to .github/workflows/.
 name: Erbapp Android APK
+run-name: 'Erbapp 0.6.0-personal · ${{ github.run_number }}'
 on:
   workflow_dispatch:
   push:
@@ -8,9 +9,6 @@ on:
       - '.github/workflows/nashi-android.yml'
       - '.github/workflows/erbapp-android-sources.zip'
       - 'android/**'
-      - 'docs/**'
-      - 'Resources/licenses/**'
-      - 'LICENSE'
 permissions:
   contents: read
 concurrency:
@@ -28,22 +26,26 @@ jobs:
       - name: Doğrulanan Android kaynak paketini aç
         run: |
           python3 - <<'PY'
-          import hashlib,io,pathlib,zipfile
-          if pathlib.Path("android/app/build.gradle.kts").is_file():
-              print("Using checked-in Android sources.")
-          else:
-              package=pathlib.Path(".github/workflows/erbapp-android-sources.zip")
-              if not package.is_file():
-                  raise RuntimeError("erbapp-android-sources.zip dosyasını ZIP olarak .github/workflows klasörüne yükle.")
-              data=package.read_bytes()
-              if hashlib.sha256(data).hexdigest()!='2fa3f6a00dc8c2aa4a7b5f1a0311306c75fcfe0c67418919f28c2483631856b2':
-                  raise RuntimeError("Kaynak ZIP özeti eşleşmiyor. Aynı teslimattaki YAML ve ZIP dosyalarını birlikte yükle.")
-              with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                  for info in archive.infolist():
-                      path=pathlib.PurePosixPath(info.filename)
-                      assert not path.is_absolute() and ".." not in path.parts and path.parts[0]=="android"
-                      assert ((info.external_attr >> 16) & 0o170000) != 0o120000
-                  archive.extractall(".")
+          import hashlib,io,json,os,pathlib,shutil,zipfile
+          package=pathlib.Path(".github/workflows/erbapp-android-sources.zip")
+          if not package.is_file():
+              raise RuntimeError("erbapp-android-sources.zip dosyasını ZIP olarak .github/workflows klasörüne yükle.")
+          data=package.read_bytes()
+          if hashlib.sha256(data).hexdigest()!='32b2db00ce99c28afe2ef9fd29c9da4635284c1fb7e4e4019f2cafa624c5e689':
+              raise RuntimeError("Kaynak ZIP özeti eşleşmiyor. Aynı teslimattaki YAML ve ZIP dosyalarını birlikte yükle.")
+          with zipfile.ZipFile(io.BytesIO(data)) as archive:
+              for info in archive.infolist():
+                  path=pathlib.PurePosixPath(info.filename)
+                  assert not path.is_absolute() and ".." not in path.parts and path.parts[0]=="android"
+                  assert ((info.external_attr >> 16) & 0o170000) != 0o120000
+              if pathlib.Path("android").exists():shutil.rmtree("android")
+              archive.extractall(".")
+          properties=dict(line.split("=",1) for line in pathlib.Path("android/version.properties").read_text().splitlines() if "=" in line)
+          assert properties["versionName"]=='0.6.0-personal'
+          report={"version":properties["versionName"],"source_sha256":'32b2db00ce99c28afe2ef9fd29c9da4635284c1fb7e4e4019f2cafa624c5e689',"commit":os.environ.get("GITHUB_SHA","local"),"run_id":os.environ.get("GITHUB_RUN_ID","local"),"attempt":os.environ.get("GITHUB_RUN_ATTEMPT","1")}
+          target=pathlib.Path("android/build/reports/source-package.json");target.parent.mkdir(parents=True,exist_ok=True)
+          target.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
+          print(json.dumps(report,ensure_ascii=False))
           PY
       - uses: actions/setup-java@v4
         with:
@@ -67,6 +69,8 @@ jobs:
           gradle-version: '9.4.1'
       - name: Android SDK
         run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - name: Kabul testi bağımlılıklarını kur
+        run: python3 -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.10.0 Pillow==12.3.0
       - name: Paketleme ve aktarım testleri
         run: |
           mkdir -p android/build/reports/ci
@@ -74,8 +78,6 @@ jobs:
           python3 -m unittest discover -s android/tests -p 'test_*.py' -v 2>&1 | tee android/build/reports/ci/python-tests.log
       - name: Web runtime lisanslarını ve bütünlüğünü denetle
         run: python3 android/scripts/audit_web_vendor.py --output android/build/reports/web-vendor-licenses.json
-      - name: Tarayıcı test aracını kur
-        run: python3 -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.10.0
       - name: Gerçek çalışma zamanı bağımlılıklarını çöz
         id: runtime_components
         run: gradle -p android :app:exportRuntimeComponents --no-daemon --stacktrace 2>&1 | tee android/build/reports/ci/runtime-resolution.log
@@ -90,8 +92,10 @@ jobs:
         if: ${{ !cancelled() && steps.runtime_components.outcome == 'success' && steps.licenses.outcome == 'success' }}
         run: gradle -p android :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon --continue --stacktrace 2>&1 | tee android/build/reports/ci/android-build.log
       - name: APK içindeki arayüz ve gerçek çıktı testleri
+        id: browser
         run: python3 android/scripts/browser_acceptance.py --android-only --android android/app/build/generated/nashiAssets --repo . --output android/build/reports/browser 2>&1 | tee android/build/reports/ci/browser-tests.log
       - name: Oluşan gerçek PNG ve PDF dosyalarının içeriğini doğrula
+        if: ${{ !cancelled() && steps.browser.outcome != 'skipped' }}
         run: python3 android/scripts/verify_converter_outputs.py --android-only --folder android/build/reports/browser --node-pdf android/build/reports/epub/turkce-kitap.pdf 2>&1 | tee android/build/reports/ci/converter-outputs.log
       - name: Erbapp APK imzala ve sertifikasını doğrula
         env:
