@@ -1,6 +1,6 @@
 # Upload this YAML and erbapp-android-sources.zip together to .github/workflows/.
 name: Erbapp Android APK
-run-name: 'Erbapp 0.6.0-personal · ${{ github.run_number }}'
+run-name: 'Erbapp 0.6.1-personal · ${{ github.run_number }}'
 on:
   workflow_dispatch:
   push:
@@ -31,7 +31,7 @@ jobs:
           if not package.is_file():
               raise RuntimeError("erbapp-android-sources.zip dosyasını ZIP olarak .github/workflows klasörüne yükle.")
           data=package.read_bytes()
-          if hashlib.sha256(data).hexdigest()!='32b2db00ce99c28afe2ef9fd29c9da4635284c1fb7e4e4019f2cafa624c5e689':
+          if hashlib.sha256(data).hexdigest()!='55da4d6e14179fc4ab85403001b795ad941d51cbd62f4eff179df5de3cac71e7':
               raise RuntimeError("Kaynak ZIP özeti eşleşmiyor. Aynı teslimattaki YAML ve ZIP dosyalarını birlikte yükle.")
           with zipfile.ZipFile(io.BytesIO(data)) as archive:
               for info in archive.infolist():
@@ -41,8 +41,8 @@ jobs:
               if pathlib.Path("android").exists():shutil.rmtree("android")
               archive.extractall(".")
           properties=dict(line.split("=",1) for line in pathlib.Path("android/version.properties").read_text().splitlines() if "=" in line)
-          assert properties["versionName"]=='0.6.0-personal'
-          report={"version":properties["versionName"],"source_sha256":'32b2db00ce99c28afe2ef9fd29c9da4635284c1fb7e4e4019f2cafa624c5e689',"commit":os.environ.get("GITHUB_SHA","local"),"run_id":os.environ.get("GITHUB_RUN_ID","local"),"attempt":os.environ.get("GITHUB_RUN_ATTEMPT","1")}
+          assert properties["versionName"]=='0.6.1-personal'
+          report={"version":properties["versionName"],"source_sha256":'55da4d6e14179fc4ab85403001b795ad941d51cbd62f4eff179df5de3cac71e7',"commit":os.environ.get("GITHUB_SHA","local"),"run_id":os.environ.get("GITHUB_RUN_ID","local"),"attempt":os.environ.get("GITHUB_RUN_ATTEMPT","1")}
           target=pathlib.Path("android/build/reports/source-package.json");target.parent.mkdir(parents=True,exist_ok=True)
           target.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
           print(json.dumps(report,ensure_ascii=False))
