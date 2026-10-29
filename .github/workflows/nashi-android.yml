@@ -36,7 +36,7 @@ jobs:
               if not package.is_file():
                   raise RuntimeError("erbapp-android-sources.zip dosyasını ZIP olarak .github/workflows klasörüne yükle.")
               data=package.read_bytes()
-              if hashlib.sha256(data).hexdigest()!='ef7cc0cec29d84faef7a5cf284b3e3159a82732bcf744794d1a604a387bef1ee':
+              if hashlib.sha256(data).hexdigest()!='2fa3f6a00dc8c2aa4a7b5f1a0311306c75fcfe0c67418919f28c2483631856b2':
                   raise RuntimeError("Kaynak ZIP özeti eşleşmiyor. Aynı teslimattaki YAML ve ZIP dosyalarını birlikte yükle.")
               with zipfile.ZipFile(io.BytesIO(data)) as archive:
                   for info in archive.infolist():
